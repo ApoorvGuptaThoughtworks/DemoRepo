@@ -1,0 +1,46 @@
+name: Feature CI
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+jobs:
+  build:
+    name: Build service
+    runs-on: self-hosted
+    services:
+      # Label used to access the service container
+      cosmos:
+        # Docker Hub image
+        image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+        env:
+          AZURE_COSMOS_EMULATOR_PARTITION_COUNT: 2
+          AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: true
+          AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE: 127.0.0.0
+          AZURE_COSMOS_EMULATOR_KEY: "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+        ports:
+          # Opens tcp port 8084 on the host and service container
+          - 8084:8084
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+      - name: Check All running containers
+        run:  docker ps
+      - name: Install curl
+        run: apk add --update; apk --no-cache add curl
+      - name: Install cosmos certificates
+        env:
+          AZURE_COSMOS_DB_CERT_DIR: $(mktemp -d)
+          AZURE_COSMOS_DB_CERT_FILE: emulatorcert.crt
+          AZURE_COSMOS_EMULATOR_URL: "http://localhost:8084"
+        run: curl -k ${{env.AZURE_COSMOS_EMULATOR_URL}}/_explorer/emulator.pem > ${{env.AZURE_COSMOS_DB_CERT_DIR}}/${{env.AZURE_COSMOS_DB_CERT_FILE}}
+      - name: Stop all containers
+        run: docker stop $(docker ps -a -q)
+      - name: Kill all containers
+        run: docker rm $(docker ps -a -q)
